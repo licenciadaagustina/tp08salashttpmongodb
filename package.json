@@ -1,0 +1,18 @@
+{
+  "name": "tp-08-salas-http-mongodb",
+  "version": "1.0.0",
+  "description": "",
+  "main": "api.routes.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "mongoose": "^9.11.4"
+  }
+}
