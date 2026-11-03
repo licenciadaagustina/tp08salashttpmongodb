@@ -1,134 +1,141 @@
-const ReservaService = require('../services/reserva.service');
+const Reserva = require('../models/reserva.model'); // Asegurate de apuntar a tu modelo
+
+// Listar todas las reservas (GET /api/reservas)
+const listarReservasApi = async (req, res) => {
+    try {
+        const reservas = await Reserva.find();
+        res.status(200).json(reservas);
+    } catch (error) {
+        res.status(500).json({ error: "Fallo inesperado al listar reservas" });
+    }
+};
+
+// Obtener una reserva por ID (GET /api/reservas/:id)
+const obtenerReservaPorIdApi = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const reserva = await Reserva.findById(id);
+        if (!reserva) {
+            return res.status(404).json({ error: "Reserva no encontrada" });
+        }
+        res.status(200).json(reserva);
+    } catch (error) {
+        res.status(400).json({ error: "ID inválido o error en la consulta" });
+    }
+};
+
+// Crear una reserva (POST /api/reservas)
+const crearReservaApi = async (req, res) => {
+    try {
+        // El POST no acepta que el cliente asigne estado ni _id
+        const { estudiante, email, sala, fecha, turno, personas } = req.body;
+        
+        const nuevaReserva = new Reserva({
+            estudiante,
+            email,
+            sala,
+            fecha,
+            turno,
+            personas,
+            estado: 'pendiente' // por defecto pendiente
+        });
+
+        const reservaGuardada = await nuevaReserva.save();
+        
+        // Devolver 201, recurso y Location header
+        res.status(201)
+           .header('Location', `/api/reservas/${reservaGuardada._id}`)
+           .json(reservaGuardada);
+    } catch (error) {
+        res.status(400).json({ error: "Datos de entrada inválidos para la creación" });
+    }
+};
+
+// Reemplazo completo (PUT /api/reservas/:id)
+const reemplazarReservaApi = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { estudiante, email, sala, fecha, turno, personas, estado } = req.body;
+
+        // PUT exige los 7 campos editables
+        if (!estudiante || !email || !sala || !fecha || !turno || personas === undefined || !estado) {
+            return res.status(400).json({ error: "Faltan campos obligatorios para el reemplazo completo (se exigen los 7)" });
+        }
+
+        // Ejecutar reemplazo con runValidators: true y upsert: false
+        const reservaActualizada = await Reserva.findByIdAndUpdate(
+            id,
+            { estudiante, email, sala, fecha, turno, personas, estado },
+            { new: true, runValidators: true, upsert: false }
+        );
+
+        if (!reservaActualizada) {
+            return res.status(404).json({ error: "ID válido pero ausente al intentar modificar" });
+        }
+
+        res.status(200).json(reservaActualizada);
+    } catch (error) {
+        res.status(400).json({ error: "Entrada inválida o error en el reemplazo" });
+    }
+};
+
+// Actualización parcial (PATCH /api/reservas/:id)
+const actualizarParcialReservaApi = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const camposPermitidos = {};
+
+        // PATCH admite solo personas y estado, con al menos uno presente
+        if (req.body.personas !== undefined) {
+            camposPermitidos.personas = req.body.personas;
+        }
+        if (req.body.estado !== undefined) {
+            camposPermitidos.estado = req.body.estado;
+        }
+
+        if (Object.keys(camposPermitidos).length === 0) {
+            return res.status(400).json({ error: "Se debe proporcionar al menos 'personas' o 'estado' para actualizar" });
+        }
+
+        // Nunca pasar req.body completo, usar el objeto con los campos permitidos y $set
+        const reservaActualizada = await Reserva.findByIdAndUpdate(
+            id,
+            { $set: camposPermitidos },
+            { new: true, runValidators: true, upsert: false }
+        );
+
+        if (!reservaActualizada) {
+            return res.status(404).json({ error: "ID válido pero ausente al intentar modificar" });
+        }
+
+        res.status(200).json(reservaActualizada);
+    } catch (error) {
+        res.status(400).json({ error: "Actualización parcial inválida" });
+    }
+};
+
+// Eliminación física (DELETE /api/reservas/:id)
+const eliminarReservaApi = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const reservaEliminada = await Reserva.findByIdAndDelete(id);
+
+        if (!reservaEliminada) {
+            return res.status(404).json({ error: "Recurso no encontrado para eliminar" });
+        }
+
+        // 204 sin cuerpo si eliminó correctamente
+        res.status(204).send();
+    } catch (error) {
+        res.status(400).json({ error: "ID mal formado o error al eliminar" });
+    }
+};
 
 module.exports = {
-    // --- MÉTODOS PARA EL SITIO HTML ---
-    mostrarFormulario: (req, res) => {
-        try {
-            res.render('index.ejs', { error: null });
-        } catch (error) {
-            console.error("Error:", error);
-            res.status(500).send("Error en el servidor");
-        }
-    },
-
-    crearReserva: async (req, res) => {
-        try {
-            const { estudiante, email, sala, fecha, turno, personas } = req.body;
-            await ReservaService.crearReserva({ estudiante, email, sala, fecha, turno, personas });
-            res.redirect('/estado');
-        } catch (error) {
-            console.error("Error:", error);
-            res.render('index.ejs', { error: "No se pudo registrar" });
-        }
-    },
-
-    verEstado: async (req, res) => {
-        try {
-            const reservas = await ReservaService.obtenerReservas();
-            res.render('estado.ejs', { reservas });
-        } catch (error) {
-            console.error("Error:", error);
-            res.status(500).send("Error en el servidor");
-        }
-    },
-
-    // --- MÉTODOS PARA LA API JSON (TP 08) ---
-    listarReservasApi: async (req, res, next) => {
-        try {
-            const { sala } = req.query;
-            
-            // Validar si el parámetro sala viene repetido como arreglo
-            if (Array.isArray(sala)) {
-                return res.status(400).json({ error: "Parámetro sala repetido" });
-            }
-
-            let reservas;
-            if (sala) {
-                // Filtro exacto por sala textual según la consigna
-                reservas = await ReservaService.obtenerReservasPorSala(sala);
-            } else {
-                reservas = await ReservaService.obtenerReservas();
-            }
-
-            // Mapear los documentos para exponer el id textual derivado del ObjectId
-            const resultado = reservas.map(r => ({
-                id: r._id.toString(),
-                estudiante: r.estudiante,
-                email: r.email,
-                sala: r.sala,
-                fecha: r.fecha,
-                turno: r.turno,
-                personas: r.personas,
-                estado: r.estado
-            }));
-
-            res.status(200).json(resultado);
-        } catch (error) {
-            next(error);
-        }
-    },
-
-    crearReservaApi: async (req, res, next) => {
-        try {
-            // Copiar explícitamente solo los 6 campos admitidos (rechazando req.body completo o campos extra como estado/id)
-            const { estudiante, email, sala, fecha, turno, personas } = req.body;
-
-            const nuevaReserva = await ReservaService.crearReserva({
-                estudiante,
-                email,
-                sala,
-                fecha,
-                turno,
-                personas,
-                estado: 'pendiente' // Default exigido
-            });
-
-            const idStr = nuevaReserva._id.toString();
-
-            // Configurar cabecera Location y responder 201
-            res.setHeader('Location', `/api/reservas/${idStr}`);
-            res.status(201).json({
-                id: idStr,
-                estudiante: nuevaReserva.estudiante,
-                email: nuevaReserva.email,
-                sala: nuevaReserva.sala,
-                fecha: nuevaReserva.fecha,
-                turno: nuevaReserva.turno,
-                personas: nuevaReserva.personas,
-                estado: nuevaReserva.estado
-            });
-        } catch (error) {
-            next(error);
-        }
-    },
-
-    obtenerReservaPorIdApi: async (req, res, next) => {
-        try {
-            const { id } = req.params;
-
-            // Validar formato básico de ObjectId de Mongoose (24 caracteres hexadecimales)
-            if (!id.match(/^[0-9a-fA-F]{24}$/)) {
-                return res.status(400).json({ error: "ID mal formado" });
-            }
-
-            const reserva = await ReservaService.obtenerReservaPorId(id);
-
-            if (!reserva) {
-                return res.status(404).json({ error: "Recurso no encontrado" });
-            }
-
-            res.status(200).json({
-                id: reserva._id.toString(),
-                estudiante: reserva.estudiante,
-                email: reserva.email,
-                sala: reserva.sala,
-                fecha: reserva.fecha,
-                turno: reserva.turno,
-                personas: reserva.personas,
-                estado: reserva.estado
-            });
-        } catch (error) {
-            next(error);
-        }
-    }
+    listarReservasApi,
+    obtenerReservaPorIdApi,
+    crearReservaApi,
+    reemplazarReservaApi,
+    actualizarParcialReservaApi,
+    eliminarReservaApi
 };

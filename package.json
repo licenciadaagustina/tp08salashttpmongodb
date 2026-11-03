@@ -1,18 +1,22 @@
 {
-  "name": "tp-08-salas-http-mongodb",
+  "name": "tp-09-salas-crud-mongodb",
   "version": "1.0.0",
-  "description": "",
-  "main": "api.routes.js",
+  "description": "TP 09 - Operaciones CRUD completas con Node.js, Express y MongoDB",
+  "main": "src/app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "dotenv": "^18.0.9",
-    "express": "^5.3.0",
-    "mongoose": "^9.11.4"
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^4.19.2",
+    "mongoose": "^8.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
   }
 }
