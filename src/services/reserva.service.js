@@ -25,10 +25,37 @@ async function contarReservas() {
     return await Reserva.countDocuments();
 }
 
+// Actualizar completamente una reserva (PUT)
+async function actualizarReservaPut(id, datosActualizados) {
+    return await Reserva.findByIdAndUpdate(
+        id,
+        datosActualizados,
+        { new: true, runValidators: true, upsert: false }
+    );
+}
+
+// Actualizar parcialmente una reserva (PATCH)
+async function actualizarReservaPatch(id, datosParciales) {
+    return await Reserva.findByIdAndUpdate(
+        id,
+        { $set: datosParciales },
+        { new: true, runValidators: true, upsert: false }
+    );
+}
+
+// Eliminar una reserva físicamente por ID (DELETE)
+async function eliminarReserva(id) {
+    return await Reserva.findByIdAndDelete(id);
+}
+
+// ¡Exportamos todas juntas al final del archivo!
 module.exports = {
     obtenerReservas,
     obtenerReservasPorSala,
     obtenerReservaPorId,
     crearReserva,
-    contarReservas
+    contarReservas,
+    actualizarReservaPut,
+    actualizarReservaPatch,
+    eliminarReserva
 };
