@@ -1,14 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const reservaController = require('../controllers/reserva.controller');
+const reservaWebController = require('../controllers/reserva.web.controller'); // Ajustá la ruta si usás otro nombre
 
-// Ruta principal: Listado web de reservas
-router.get('/', reservaController.listarWeb);
+// Ruta principal / inicio (listado HTML de reservas)
+router.get('/', reservaWebController.listarReservasWeb);
 
-// Ruta para procesar el formulario de creación (con redirección 302 o error 400)
-router.post('/reservas', reservaController.crearWeb);
+// Ruta para ver el detalle individual de una reserva en el navegador
+router.get('/reservas/:id', reservaWebController.obtenerDetalleWeb);
 
-// Ruta de estado con el conteo real de MongoDB
-router.get('/estado', reservaController.verEstadoWeb);
+// Ruta para mostrar el formulario de creación / procesar el alta (POST)
+router.get('/crear', reservaWebController.mostrarFormularioWeb);
+router.post('/crear', reservaWebController.crearReservaWeb);
+
+// Ruta /estado que muestra la cantidad real de documentos en MongoDB
+router.get('/estado', reservaWebController.mostrarEstadoWeb);
 
 module.exports = router;
