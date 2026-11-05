@@ -20,12 +20,28 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
+// --- NUEVO: Middleware para capturar JSON mal formado (Error 400) ---
+app.use((err, req, res, next) => {
+    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+        return res.status(400).json({ error: "El formato del JSON enviado es inválido o está mal formado." });
+    }
+    next(err);
+});
+// -------------------------------------------------------------------
+
 // Importar rutas
 const webRoutes = require('./routes/web.routes');
 const apiRoutes = require('./routes/api.routes');
 
 app.use('/', webRoutes);
 app.use('/api/reservas', apiRoutes);
+
+// --- NUEVO: Middleware general de errores de 4 parámetros para la API ---
+app.use((err, req, res, next) => {
+    console.error("Error global capturado:", err.stack);
+    res.status(500).json({ error: "Ocurrió un error interno en el servidor." });
+});
+// -----------------------------------------------------------------------
 
 const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI;

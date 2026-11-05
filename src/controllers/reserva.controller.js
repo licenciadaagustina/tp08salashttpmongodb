@@ -30,13 +30,19 @@ const crearReservaApi = async (req, res) => {
         // El POST no acepta que el cliente asigne estado ni _id
         const { estudiante, email, sala, fecha, turno, personas } = req.body;
         
+        // Validación estricta del tipo de dato en personas (evita booleanos, objetos o decimales)
+        const numPersonas = Number(personas);
+        if (!Number.isInteger(numPersonas) || numPersonas < 1 || numPersonas > 6) {
+            return res.status(400).json({ error: "El campo 'personas' debe ser un número entero entre 1 y 6." });
+        }
+
         const nuevaReserva = new Reserva({
             estudiante,
             email,
             sala,
             fecha,
             turno,
-            personas,
+            personas: numPersonas,
             estado: 'pendiente' // por defecto pendiente
         });
 
@@ -62,10 +68,15 @@ const reemplazarReservaApi = async (req, res) => {
             return res.status(400).json({ error: "Faltan campos obligatorios para el reemplazo completo (se exigen los 7)" });
         }
 
+        const numPersonas = Number(personas);
+        if (!Number.isInteger(numPersonas) || numPersonas < 1 || numPersonas > 6) {
+            return res.status(400).json({ error: "El campo 'personas' debe ser un número entero entre 1 y 6." });
+        }
+
         // Ejecutar reemplazo con runValidators: true y upsert: false
         const reservaActualizada = await Reserva.findByIdAndUpdate(
             id,
-            { estudiante, email, sala, fecha, turno, personas, estado },
+            { estudiante, email, sala, fecha, turno, personas: numPersonas, estado },
             { new: true, runValidators: true, upsert: false }
         );
 
@@ -87,7 +98,11 @@ const actualizarParcialReservaApi = async (req, res) => {
 
         // PATCH admite solo personas y estado, con al menos uno presente
         if (req.body.personas !== undefined) {
-            camposPermitidos.personas = req.body.personas;
+            const numPersonas = Number(req.body.personas);
+            if (!Number.isInteger(numPersonas) || numPersonas < 1 || numPersonas > 6) {
+                return res.status(400).json({ error: "El campo 'personas' debe ser un número entero entre 1 y 6." });
+            }
+            camposPermitidos.personas = numPersonas;
         }
         if (req.body.estado !== undefined) {
             camposPermitidos.estado = req.body.estado;
