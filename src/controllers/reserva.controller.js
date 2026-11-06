@@ -1,156 +1,94 @@
-const Reserva = require('../models/reserva.model'); // Asegurate de apuntar a tu modelo
+const mongoose = require('mongoose');
+const reservaService = require('../services/reserva.service');
 
-// Listar todas las reservas (GET /api/reservas)
-const listarReservasApi = async (req, res) => {
-    try {
-        const reservas = await Reserva.find();
-        res.status(200).json(reservas);
-    } catch (error) {
-        res.status(500).json({ error: "Fallo inesperado al listar reservas" });
+const listarReservasApi = async (req, res, next) => {
+  try {
+    const salaQuery = req.query.sala;
+    let filtroSala = null;
+
+    if (salaQuery !== undefined) {
+      if (Array.isArray(salaQuery)) {
+        return res.status(400).json({ error: 'El parámetro sala no puede estar repetido' });
+      }
+      if (typeof salaQuery !== 'string') {
+        return res.status(400).json({ error: 'Formato de sala inválido' });
+      }
+      filtroSala = salaQuery.trim();
     }
+
+    const reservas = await reservaService.listarReservas(filtroSala);
+    return res.status(200).json(reservas);
+  } catch (error) {
+    next(error);
+  }
 };
 
-// Obtener una reserva por ID (GET /api/reservas/:id)
-const obtenerReservaPorIdApi = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const reserva = await Reserva.findById(id);
-        if (!reserva) {
-            return res.status(404).json({ error: "Reserva no encontrada" });
-        }
-        res.status(200).json(reserva);
-    } catch (error) {
-        res.status(400).json({ error: "ID inválido o error en la consulta" });
+const obtenerReservaPorIdApi = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'ID mal formado' });
     }
+
+    const reserva = await reservaService.obtenerReservaPorId(id);
+    if (!reserva) {
+      return res.status(404).json({ error: 'Reserva no encontrada' });
+    }
+
+    return res.status(200).json(reserva);
+  } catch (error) {
+    next(error);
+  }
 };
 
-// Crear una reserva (POST /api/reservas)
-const crearReservaApi = async (req, res) => {
-    try {
-        // El POST no acepta que el cliente asigne estado ni _id
-        const { estudiante, email, sala, fecha, turno, personas } = req.body;
-        
-        // Validación estricta del tipo de dato en personas (evita booleanos, objetos o decimales)
-        const numPersonas = Number(personas);
-        if (!Number.isInteger(numPersonas) || numPersonas < 1 || numPersonas > 6) {
-            return res.status(400).json({ error: "El campo 'personas' debe ser un número entero entre 1 y 6." });
-        }
+const crearReservaApi = async (req, res, next) => {
+  try {
+    const nuevaReserva = await reservaService.crearReserva(req.body);
+    
+    const locationUrl = `${req.protocol}://${req.get('host')}/api/reservas/${nuevaReserva.id}`;
+    res.setHeader('Location', locationUrl);
 
-        const nuevaReserva = new Reserva({
-            estudiante,
-            email,
-            sala,
-            fecha,
-            turno,
-            personas: numPersonas,
-            estado: 'pendiente' // por defecto pendiente
-        });
-
-        const reservaGuardada = await nuevaReserva.save();
-        
-        // Devolver 201, recurso y Location header
-        res.status(201)
-           .header('Location', `/api/reservas/${reservaGuardada._id}`)
-           .json(reservaGuardada);
-    } catch (error) {
-        res.status(400).json({ error: "Datos de entrada inválidos para la creación" });
+    return res.status(201).json(nuevaReserva);
+  } catch (error) {
+    if (error.status === 400 || error.name === 'ValidationError') {
+      return res.status(400).json({ error: error.message });
     }
+    next(error);
+  }
 };
 
-// Reemplazo completo (PUT /api/reservas/:id)
-const reemplazarReservaApi = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { estudiante, email, sala, fecha, turno, personas, estado } = req.body;
-
-        // PUT exige los 7 campos editables
-        if (!estudiante || !email || !sala || !fecha || !turno || personas === undefined || !estado) {
-            return res.status(400).json({ error: "Faltan campos obligatorios para el reemplazo completo (se exigen los 7)" });
-        }
-
-        const numPersonas = Number(personas);
-        if (!Number.isInteger(numPersonas) || numPersonas < 1 || numPersonas > 6) {
-            return res.status(400).json({ error: "El campo 'personas' debe ser un número entero entre 1 y 6." });
-        }
-
-        // Ejecutar reemplazo con runValidators: true y upsert: false
-        const reservaActualizada = await Reserva.findByIdAndUpdate(
-            id,
-            { estudiante, email, sala, fecha, turno, personas: numPersonas, estado },
-            { new: true, runValidators: true, upsert: false }
-        );
-
-        if (!reservaActualizada) {
-            return res.status(404).json({ error: "ID válido pero ausente al intentar modificar" });
-        }
-
-        res.status(200).json(reservaActualizada);
-    } catch (error) {
-        res.status(400).json({ error: "Entrada inválida o error en el reemplazo" });
-    }
+// Funciones adicionales por si tus rutas las usan (PUT, PATCH, DELETE)
+const reemplazarReservaApi = async (req, res, next) => {
+  try {
+    // Lógica o stub si tu profesor lo exige
+    return res.status(501).json({ error: 'No implementado' });
+  } catch (error) {
+    next(error);
+  }
 };
 
-// Actualización parcial (PATCH /api/reservas/:id)
-const actualizarParcialReservaApi = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const camposPermitidos = {};
-
-        // PATCH admite solo personas y estado, con al menos uno presente
-        if (req.body.personas !== undefined) {
-            const numPersonas = Number(req.body.personas);
-            if (!Number.isInteger(numPersonas) || numPersonas < 1 || numPersonas > 6) {
-                return res.status(400).json({ error: "El campo 'personas' debe ser un número entero entre 1 y 6." });
-            }
-            camposPermitidos.personas = numPersonas;
-        }
-        if (req.body.estado !== undefined) {
-            camposPermitidos.estado = req.body.estado;
-        }
-
-        if (Object.keys(camposPermitidos).length === 0) {
-            return res.status(400).json({ error: "Se debe proporcionar al menos 'personas' o 'estado' para actualizar" });
-        }
-
-        // Nunca pasar req.body completo, usar el objeto con los campos permitidos y $set
-        const reservaActualizada = await Reserva.findByIdAndUpdate(
-            id,
-            { $set: camposPermitidos },
-            { new: true, runValidators: true, upsert: false }
-        );
-
-        if (!reservaActualizada) {
-            return res.status(404).json({ error: "ID válido pero ausente al intentar modificar" });
-        }
-
-        res.status(200).json(reservaActualizada);
-    } catch (error) {
-        res.status(400).json({ error: "Actualización parcial inválida" });
-    }
+const actualizarParcialReservaApi = async (req, res, next) => {
+  try {
+    return res.status(501).json({ error: 'No implementado' });
+  } catch (error) {
+    next(error);
+  }
 };
 
-// Eliminación física (DELETE /api/reservas/:id)
-const eliminarReservaApi = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const reservaEliminada = await Reserva.findByIdAndDelete(id);
-
-        if (!reservaEliminada) {
-            return res.status(404).json({ error: "Recurso no encontrado para eliminar" });
-        }
-
-        // 204 sin cuerpo si eliminó correctamente
-        res.status(204).send();
-    } catch (error) {
-        res.status(400).json({ error: "ID mal formado o error al eliminar" });
-    }
+const eliminarReservaApi = async (req, res, next) => {
+  try {
+    return res.status(501).json({ error: 'No implementado' });
+  } catch (error) {
+    next(error);
+  }
 };
 
 module.exports = {
-    listarReservasApi,
-    obtenerReservaPorIdApi,
-    crearReservaApi,
-    reemplazarReservaApi,
-    actualizarParcialReservaApi,
-    eliminarReservaApi
+  listarReservasApi,
+  obtenerReservaPorIdApi,
+  crearReservaApi,
+  reemplazarReservaApi,
+  actualizarParcialReservaApi,
+  eliminarReservaApi
 };

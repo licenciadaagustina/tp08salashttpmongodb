@@ -1,81 +1,66 @@
-// 1. Cargar las variables de entorno al inicio absoluto de la aplicación
 require('dotenv').config();
 
 const express = require('express');
-const path = require('path');
 const mongoose = require('mongoose');
+const path = require('path');
+
+// Importar rutas
+const apiRoutes = require('./routes/api.routes');
+const webRoutes = require('./routes/web.routes');
 
 const app = express();
 
-// 2. Diagnóstico temporal para verificar si lee el .env
-console.log("--- DIAGNÓSTICO .ENV ---");
-console.log("Directorio actual:", __dirname);
-console.log("MONGO_URI detectado:", process.env.MONGO_URI ? "¡Sí existe y se cargó!" : "UNDEFINED (No se encontró el .env)");
-console.log("--------------------------");
-
-// Configuraciones de vistas y middlewares
+// Configuración de Motor de Plantillas (EJS)
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+// Middlewares para procesar datos
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// --- NUEVO: Middleware para capturar JSON mal formado (Error 400) ---
-app.use((err, req, res, next) => {
-    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-        return res.status(400).json({ error: "El formato del JSON enviado es inválido o está mal formado." });
-    }
-    next(err);
-});
-// -------------------------------------------------------------------
+// Validar variable de entorno MONGO_URI
+if (!process.env.MONGO_URI) {
+  console.error('ERROR: MONGO_URI no está definida en las variables de entorno.');
+  process.exit(1);
+}
 
-// Importar rutas
-const webRoutes = require('./routes/web.routes');
-const apiRoutes = require('./routes/api.routes');
+// Conexión a MongoDB Atlas
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('Conexión a MongoDB Atlas exitosa'))
+  .catch((err) => console.error('Error al conectar a MongoDB:', err));
 
+// Rutas
+app.use('/api', apiRoutes);
 app.use('/', webRoutes);
-app.use('/api/reservas', apiRoutes);
 
-// --- NUEVO: Middleware general de errores de 4 parámetros para la API ---
-app.use((err, req, res, next) => {
-    console.error("Error global capturado:", err.stack);
-    res.status(500).json({ error: "Ocurrió un error interno en el servidor." });
+// Manejo de rutas no encontradas (404)
+app.use((req, res, next) => {
+  res.status(404).render('index', { 
+    reservas: [], 
+    valores: {}, 
+    error: 'Ruta no encontrada' 
+  });
 });
-// -----------------------------------------------------------------------
 
+// Middleware de manejo de errores global
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  const status = err.status || 500;
+  res.status(status).json({ error: err.message || 'Error interno del servidor' });
+});
+
+// Iniciar servidor
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI;
+const server = app.listen(PORT, () => {
+  console.log(`Servidor escuchando en http://localhost:${PORT}`);
+});
 
-let server;
-
-// Conexión a MongoDB Atlas (espera conexión antes de abrir el puerto)
-mongoose.connect(MONGO_URI)
-    .then(() => {
-        console.log("¡Conectado exitosamente a MongoDB!");
-        server = app.listen(PORT, () => {
-            console.log(`Servidor corriendo en el puerto ${PORT}`);
-        });
-    })
-    .catch((error) => {
-        console.error("Error al conectar a MongoDB:", error);
-        process.exit(1);
-    });
-
-// Cierre ordenado ante señales del sistema (SIGINT / SIGTERM)
-const gracefulShutdown = async (signal) => {
-    console.log(`\nRecibida señal ${signal}. Cerrando servidor y conexión a base de datos...`);
-    try {
-        if (server) {
-            server.close();
-        }
-        await mongoose.connection.close();
-        console.log("Conexión a MongoDB cerrada correctamente.");
-        process.exit(0);
-    } catch (err) {
-        console.error("Error al cerrar la conexión a MongoDB:", err);
-        process.exit(1);
-    }
-};
-
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+// Cierre elegante (Graceful Shutdown)
+process.on('SIGTERM', () => {
+  console.log('Recibido SIGTERM. Cerrando servidor y conexión a base de datos...');
+  server.close(async () => {
+    await mongoose.connection.close();
+    console.log('Proceso terminado de forma segura.');
+    process.exit(0);
+  });
+});

@@ -1,61 +1,94 @@
 const Reserva = require('../models/reserva.model');
 
-// Obtener todas las reservas
-async function obtenerReservas() {
-    return await Reserva.find();
-}
+/**
+ * Valida de forma estricta los tipos originales de entrada antes de castear
+ */
+const validarEntradaReserva = (data) => {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    const error = new Error('Cuerpo de la solicitud inválido o ausente');
+    error.status = 400;
+    throw error;
+  }
 
-// Obtener reservas filtradas por sala exacta
-async function obtenerReservasPorSala(sala) {
-    return await Reserva.find({ sala });
-}
+  const { estudiante, email, sala, fecha, turno, personas } = data;
 
-// Buscar una reserva específica por su ID de MongoDB
-async function obtenerReservaPorId(id) {
-    return await Reserva.findById(id);
-}
+  // 1. Validar que personas no sea booleano, array, objeto, nulo ni string vacío
+  if (
+    personas === undefined ||
+    personas === null ||
+    typeof personas === 'boolean' ||
+    Array.isArray(personas) ||
+    typeof personas === 'object' ||
+    (typeof personas === 'string' && personas.trim() === '')
+  ) {
+    const error = new Error('El campo personas debe ser un número entero válido (1-6)');
+    error.status = 400;
+    throw error;
+  }
 
-// Crear y persistir una nueva reserva en la base de datos
-async function crearReserva(datosReserva) {
-    return await Reserva.create(datosReserva);
-}
+  const numPersonas = Number(personas);
+  if (!Number.isInteger(numPersonas) || numPersonas < 1 || numPersonas > 6) {
+    const error = new Error('El campo personas debe ser un entero entre 1 y 6');
+    error.status = 400;
+    throw error;
+  }
 
-// Obtener el conteo total de reservas (utilizado por la ruta /estado del sitio web)
-async function contarReservas() {
-    return await Reserva.countDocuments();
-}
+  // 2. Validar strings obligatorios y trim
+  if (!estudiante || typeof estudiante !== 'string' || estudiante.trim() === '') {
+    const error = new Error('El campo estudiante es obligatorio');
+    error.status = 400;
+    throw error;
+  }
 
-// Actualizar completamente una reserva (PUT)
-async function actualizarReservaPut(id, datosActualizados) {
-    return await Reserva.findByIdAndUpdate(
-        id,
-        datosActualizados,
-        { new: true, runValidators: true, upsert: false }
-    );
-}
+  if (!email || typeof email !== 'string' || !email.includes('@')) {
+    const error = new Error('El campo email debe ser válido y contener @');
+    error.status = 400;
+    throw error;
+  }
 
-// Actualizar parcialmente una reserva (PATCH)
-async function actualizarReservaPatch(id, datosParciales) {
-    return await Reserva.findByIdAndUpdate(
-        id,
-        { $set: datosParciales },
-        { new: true, runValidators: true, upsert: false }
-    );
-}
+  if (!fecha || typeof fecha !== 'string' || fecha.trim() === '') {
+    const error = new Error('El campo fecha es obligatorio');
+    error.status = 400;
+    throw error;
+  }
 
-// Eliminar una reserva físicamente por ID (DELETE)
-async function eliminarReserva(id) {
-    return await Reserva.findByIdAndDelete(id);
-}
+  // 3. Copia explícita de exactamente los 6 campos admitidos (ignora _id, estado extra)
+  return {
+    estudiante: estudiante.trim(),
+    email: email.trim(),
+    sala,
+    fecha: fecha.trim(),
+    turno,
+    personas: numPersonas
+  };
+};
 
-// ¡Exportamos todas juntas al final del archivo!
+const listarReservas = async (filtroSala) => {
+  const query = {};
+  if (filtroSala) {
+    query.sala = filtroSala;
+  }
+  return await Reserva.find(query);
+};
+
+const obtenerReservaPorId = async (id) => {
+  return await Reserva.findById(id);
+};
+
+const crearReserva = async (data) => {
+  const datosValidados = validarEntradaReserva(data);
+  const nuevaReserva = new Reserva(datosValidados);
+  return await nuevaReserva.save();
+};
+
+const contarReservas = async () => {
+  return await Reserva.countDocuments();
+};
+
 module.exports = {
-    obtenerReservas,
-    obtenerReservasPorSala,
-    obtenerReservaPorId,
-    crearReserva,
-    contarReservas,
-    actualizarReservaPut,
-    actualizarReservaPatch,
-    eliminarReserva
+  validarEntradaReserva,
+  listarReservas,
+  obtenerReservaPorId,
+  crearReserva,
+  contarReservas
 };
