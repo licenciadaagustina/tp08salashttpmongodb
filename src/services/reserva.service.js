@@ -65,9 +65,24 @@ const validarEntradaReserva = (data) => {
 
 const listarReservas = async (filtroSala) => {
   const query = {};
-  if (filtroSala) {
-    query.sala = filtroSala;
+
+  if (filtroSala !== undefined && filtroSala !== null) {
+    // Validar que no sea un array u objeto (ej. si mandan ?sala=A&sala=B repetido) -> 400
+    if (Array.isArray(filtroSala) || typeof filtroSala === 'object') {
+      const error = new Error('El filtro de sala debe ser un único texto');
+      error.status = 400;
+      throw error;
+    }
+
+    if (typeof filtroSala === 'string') {
+      const salaLimpia = filtroSala.trim();
+      // Si tras el trim queda vacío, se trata como ausencia de filtro y devuelve todo
+      if (salaLimpia !== '') {
+        query.sala = salaLimpia;
+      }
+    }
   }
+
   return await Reserva.find(query);
 };
 
